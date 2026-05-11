@@ -1,0 +1,114 @@
+{
+  "name": "storyflo",
+  "displayName": "Storyflo — Narrate markdown",
+  "description": "Right-click any markdown file → narrate it with Storyflo. Audio renders in a webview player. Save to your Storyflo queue in one click.",
+  "version": "0.1.0",
+  "publisher": "storyflo",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "license": "MIT",
+  "categories": [
+    "Other",
+    "Notebooks"
+  ],
+  "keywords": [
+    "storyflo",
+    "narrate",
+    "audio",
+    "text to speech",
+    "tts",
+    "markdown",
+    "newsletter",
+    "podcast"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onLanguage:mdx",
+    "onCommand:storyflo.narrateDocument",
+    "onCommand:storyflo.narrateSelection",
+    "onCommand:storyflo.saveToQueue"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "storyflo.narrateDocument",
+        "title": "Storyflo: Narrate document",
+        "category": "Storyflo"
+      },
+      {
+        "command": "storyflo.narrateSelection",
+        "title": "Storyflo: Narrate selection",
+        "category": "Storyflo"
+      },
+      {
+        "command": "storyflo.saveToQueue",
+        "title": "Storyflo: Save current article URL to queue",
+        "category": "Storyflo"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "resourceLangId == markdown || resourceLangId == mdx",
+          "command": "storyflo.narrateSelection",
+          "group": "1_storyflo@1"
+        },
+        {
+          "when": "resourceLangId == markdown || resourceLangId == mdx",
+          "command": "storyflo.narrateDocument",
+          "group": "1_storyflo@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Storyflo",
+      "properties": {
+        "storyflo.voice": {
+          "type": "string",
+          "default": "atlas",
+          "enum": ["atlas", "vox", "kira", "rune"],
+          "description": "Default voice for narration. Atlas (British), Vox (American), Kira (warm), Rune (deep)."
+        },
+        "storyflo.endpoint": {
+          "type": "string",
+          "default": "https://api.storyflo.com",
+          "description": "Storyflo inference endpoint. Leave default unless running a fork."
+        },
+        "storyflo.publisherSlug": {
+          "type": "string",
+          "default": "",
+          "description": "Your Storyflo publisher slug (claim at storyflo.com/publisher/claim). Rev-share attributes here when you save to queue."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alisammour/storyflo-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Alisammour/storyflo-vscode/issues"
+  },
+  "homepage": "https://storyflo.com/agents",
+  "qna": "marketplace",
+  "galleryBanner": {
+    "color": "#f6f5f2",
+    "theme": "light"
+  }
+}
