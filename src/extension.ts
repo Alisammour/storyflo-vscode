@@ -16,9 +16,13 @@
 
 import * as vscode from "vscode";
 import * as https from "https";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 import { URL } from "url";
 
 const VOICE_CHOICES = ["atlas", "vox", "kira", "rune"];
+const MCP_SERVER_NAME = "storyflo";
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -29,6 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
       narrate(/* selectionOnly */ true),
     ),
     vscode.commands.registerCommand("storyflo.saveToQueue", saveToQueue),
+    vscode.commands.registerCommand("storyflo.installMcp", installMcp),
   );
 }
 
@@ -282,6 +287,148 @@ function audioWebviewHtml(opts: {
   <p class="row">Pricing: free at this length. Larger renders may meter against your Storyflo+ plan.</p>
 </body>
 </html>`;
+}
+
+// ─── one-click MCP installer ─────────────────────────────────────────
+//
+// Installing Storyflo's MCP server today means hand-editing a different
+// JSON file for whichever client you happen to be using (VS Code Copilot,
+// Cursor, Continue, Cline). This command does that write for you, across
+// all four shapes, idempotently. Distribution lever: every developer
+// who installs the extension also wires Storyflo into their AI agent.
+
+type McpShape = "vscode-mcp" | "cursor" | "continue" | "cline";
+type McpTarget = {
+  label: string;
+  path: string;
+  shape: McpShape;
+  exists: boolean;
+};
+
+async function installMcp() {
+  const cfg = vscode.workspace.getConfiguration("storyflo");
+  const url =
+    cfg.get<string>("mcpUrl") || "https://api.storyflo.com/mcp";
+
+  const targets = candidateMcpFiles();
+  if (targets.length === 0) {
+    vscode.window.showWarningMessage(
+      "Storyflo: no MCP-capable client config locations found.",
+    );
+    return;
+  }
+
+  const picks = await vscode.window.showQuickPick(
+    targets.map((t) => ({
+      label: t.label,
+      description: t.path,
+      detail: t.exists ? "exists — will update" : "will create",
+      picked: t.exists,
+      target: t,
+    })),
+    {
+      title: "Add Storyflo MCP server to…",
+      canPickMany: true,
+      placeHolder:
+        "Pick every MCP-capable client you want Storyflo wired into.",
+    },
+  );
+  if (!picks || picks.length === 0) return;
+
+  const results: string[] = [];
+  for (const pick of picks) {
+    try {
+      writeMcpEntry(pick.target.path, pick.target.shape, url);
+      results.push(`✓ ${pick.target.label}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      results.push(`✗ ${pick.target.label}: ${msg}`);
+    }
+  }
+  vscode.window.showInformationMessage(
+    `Storyflo MCP install\n\n${results.join("\n")}\n\nRestart the affected clients to pick up the new server.`,
+    { modal: true },
+  );
+}
+
+function candidateMcpFiles(): McpTarget[] {
+  const home = os.homedir();
+  const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const platform = process.platform;
+
+  // VS Code's per-user "settings" location differs by OS.
+  const vscodeUserDir =
+    platform === "darwin"
+      ? path.join(home, "Library", "Application Support", "Code", "User")
+      : platform === "win32"
+        ? path.join(process.env.APPDATA || home, "Code", "User")
+        : path.join(home, ".config", "Code", "User");
+
+  const list: Array<Omit<McpTarget, "exists">> = [
+    {
+      label: "VS Code Copilot — global (mcp.json)",
+      path: path.join(vscodeUserDir, "mcp.json"),
+      shape: "vscode-mcp",
+    },
+    {
+      label: "VS Code Copilot — workspace (.vscode/mcp.json)",
+      path: ws ? path.join(ws, ".vscode", "mcp.json") : "",
+      shape: "vscode-mcp",
+    },
+    {
+      label: "Cursor — global (~/.cursor/mcp.json)",
+      path: path.join(home, ".cursor", "mcp.json"),
+      shape: "cursor",
+    },
+    {
+      label: "Cursor — workspace (.cursor/mcp.json)",
+      path: ws ? path.join(ws, ".cursor", "mcp.json") : "",
+      shape: "cursor",
+    },
+    {
+      label: "Continue (~/.continue/config.json)",
+      path: path.join(home, ".continue", "config.json"),
+      shape: "continue",
+    },
+    {
+      label: "Cline (~/.cline/mcp_settings.json)",
+      path: path.join(home, ".cline", "mcp_settings.json"),
+      shape: "cline",
+    },
+  ];
+
+  return list
+    .filter((t) => t.path)
+    .map((t) => ({ ...t, exists: fs.existsSync(t.path) }));
+}
+
+function writeMcpEntry(file: string, shape: McpShape, url: string): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const raw = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "{}";
+  const doc = raw.trim() ? JSON.parse(raw) : {};
+
+  const entry = { url, type: "http" };
+
+  if (shape === "vscode-mcp") {
+    doc.servers = doc.servers || {};
+    doc.servers[MCP_SERVER_NAME] = entry;
+  } else if (shape === "cursor") {
+    doc.mcpServers = doc.mcpServers || {};
+    doc.mcpServers[MCP_SERVER_NAME] = entry;
+  } else if (shape === "continue") {
+    doc.mcpServers = Array.isArray(doc.mcpServers) ? doc.mcpServers : [];
+    const idx = doc.mcpServers.findIndex(
+      (s: { name?: string }) => s?.name === MCP_SERVER_NAME,
+    );
+    const next = { name: MCP_SERVER_NAME, ...entry };
+    if (idx >= 0) doc.mcpServers[idx] = next;
+    else doc.mcpServers.push(next);
+  } else if (shape === "cline") {
+    doc.mcpServers = doc.mcpServers || {};
+    doc.mcpServers[MCP_SERVER_NAME] = entry;
+  }
+
+  fs.writeFileSync(file, JSON.stringify(doc, null, 2) + "\n", "utf8");
 }
 
 function escapeHtml(s: string): string {

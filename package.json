@@ -29,7 +29,8 @@
     "onLanguage:mdx",
     "onCommand:storyflo.narrateDocument",
     "onCommand:storyflo.narrateSelection",
-    "onCommand:storyflo.saveToQueue"
+    "onCommand:storyflo.saveToQueue",
+    "onCommand:storyflo.installMcp"
   ],
   "contributes": {
     "commands": [
@@ -46,6 +47,11 @@
       {
         "command": "storyflo.saveToQueue",
         "title": "Storyflo: Save current article URL to queue",
+        "category": "Storyflo"
+      },
+      {
+        "command": "storyflo.installMcp",
+        "title": "Storyflo: Install MCP server (one click)",
         "category": "Storyflo"
       }
     ],
@@ -81,6 +87,11 @@
           "type": "string",
           "default": "",
           "description": "Your Storyflo publisher slug (claim at storyflo.com/publisher/claim). Rev-share attributes here when you save to queue."
+        },
+        "storyflo.mcpUrl": {
+          "type": "string",
+          "default": "https://api.storyflo.com/mcp",
+          "description": "Storyflo MCP server URL. Used by the one-click MCP installer."
         }
       }
     }
